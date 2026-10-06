@@ -1,0 +1,98 @@
+/* SmartPark global base + design tokens.
+   Modern blue identity: deep navy brand, bright blue accent, white cards,
+   very light cool gray-blue page background with subtle layered glow depth.
+   Light mode only. */
+
+:root {
+  /* Brand palette */
+  --navy: #0f2a4a;          /* deep navy — primary brand */
+  --navy-900: #0a1f38;
+  --navy-700: #16365c;
+  --blue: #2563eb;          /* bright blue accent / CTA */
+  --blue-600: #1d4ed8;
+  --blue-400: #4f86f7;
+  --blue-50: #eff5ff;       /* tint for subtle fills */
+  --violet: #6366f1;        /* indigo/violet ambient glow */
+  --page-bg: #eef2f9;       /* very light cool gray-blue page background */
+  --card-bg: #ffffff;
+  --glass-bg: rgba(255, 255, 255, 0.9);        /* ~90% opaque frosted surface */
+  --glass-bg-strong: rgba(255, 255, 255, 0.94); /* winner card — more opaque */
+  --glass-border: rgba(255, 255, 255, 0.65);
+  --glass-border-blue: rgba(37, 99, 235, 0.14); /* subtle blue-tinted edge */
+  --border: #e2e8f0;
+  --text: #0f1b2d;          /* near-navy body text */
+  --text-muted: #5b6b82;
+  --text-subtle: #8696ab;
+  --success: #15803d;
+  --success-bg: #e8f6ee;
+  --danger: #b42318;
+  --danger-bg: #fdECEA;
+  --warn-bg: #fff7e6;
+  --warn-border: #f0c67a;
+  --warn-text: #8a5a12;
+
+  /* Optional GMU campus hero image.
+     To enable later: drop an approved asset into frontend/public/ (e.g.
+     campus.jpg) and set:  --campus-image: url('/campus.jpg');
+     With "none" (default) the hero uses the navy gradient + glows and still
+     looks complete. */
+  --campus-image: none;
+
+  /* Shape + depth */
+  --radius-lg: 20px;
+  --radius-md: 12px;
+  --radius-sm: 9px;
+  --shadow-card: 0 1px 2px rgba(15, 42, 74, 0.05), 0 12px 32px rgba(15, 42, 74, 0.10);
+  --shadow-soft: 0 1px 2px rgba(15, 42, 74, 0.05);
+  --shadow-hero: 0 18px 48px rgba(10, 31, 56, 0.28);
+
+  font-family: Inter, system-ui, -apple-system, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  color: var(--text);
+  background-color: var(--page-bg);
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  color: var(--text);
+  /* Richer full-page ambient depth: layered blue/indigo radial glows over a
+     soft blue-tinted base so there is never a large flat gray area. The
+     .bg-layer element adds further blurred glows on top of this. */
+  background-color: #d6e2f7;
+  background-image:
+    radial-gradient(100% 60% at 50% -10%, rgba(37, 99, 235, 0.42), transparent 62%),
+    radial-gradient(75% 55% at 102% 24%, rgba(99, 102, 241, 0.26), transparent 60%),
+    radial-gradient(85% 60% at -5% 62%, rgba(37, 99, 235, 0.26), transparent 60%),
+    radial-gradient(90% 70% at 50% 108%, rgba(29, 78, 216, 0.22), transparent 60%),
+    linear-gradient(180deg, #cfe0f8 0%, #dde8f9 45%, #d4e1f7 100%);
+  background-attachment: fixed;
+}
+
+h1, h2, h3 {
+  margin: 0;
+  color: var(--navy);
+  line-height: 1.2;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+button:focus-visible,
+select:focus-visible,
+input:focus-visible {
+  outline: 3px solid rgba(37, 99, 235, 0.4);
+  outline-offset: 2px;
+}

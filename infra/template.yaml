@@ -1,0 +1,122 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: SmartPark MVP — serverless backend (API Gateway + Lambda + DynamoDB + Bedrock)
+
+# ---------------------------------------------------------------------------
+# Parameters — values supplied at deploy time without editing the template.
+# ---------------------------------------------------------------------------
+Parameters:
+  BedrockModelId:
+    Type: String
+    Description: >-
+      Bedrock model ID used for recommendation explanations. Chosen at deploy
+      time based on supported models, region, and cost. Not hardcoded.
+    Default: ""
+  ParkingBufferMinutes:
+    Type: String
+    Description: Minutes reserved for finding a spot after arriving at the lot.
+    Default: "5"
+  CorsAllowOrigin:
+    Type: String
+    Description: >-
+      Origin allowed by CORS. "*" is fine for local development; set this to
+      the deployed Amplify frontend origin (e.g. https://main.xxxx.amplifyapp.com)
+      in production. Used for both the Lambda response header and the API
+      Gateway OPTIONS preflight.
+    Default: "*"
+
+# ---------------------------------------------------------------------------
+# Global settings applied to all Serverless functions.
+# ---------------------------------------------------------------------------
+Globals:
+  Function:
+    Runtime: python3.12
+    Timeout: 15          # seconds — generous for a Bedrock round-trip
+    MemorySize: 256
+
+Resources:
+
+  # -------------------------------------------------------------------------
+  # Task 11.1 — DynamoDB table.
+  # Single-table design, on-demand billing. PK = partition, SK = sort.
+  # -------------------------------------------------------------------------
+  SmartParkTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: smartpark
+      BillingMode: PAY_PER_REQUEST     # on-demand — no provisioned capacity to manage
+      AttributeDefinitions:
+        - AttributeName: PK
+          AttributeType: S
+        - AttributeName: SK
+          AttributeType: S
+      KeySchema:
+        - AttributeName: PK
+          KeyType: HASH                # partition key
+        - AttributeName: SK
+          KeyType: RANGE               # sort key
+
+  # -------------------------------------------------------------------------
+  # Task 11.2 — Lambda function, environment variables, and IAM permissions.
+  # -------------------------------------------------------------------------
+  RecommendationFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: smartpark-recommend
+      CodeUri: ../backend/
+      Handler: handler.lambda_handler
+      Environment:
+        Variables:
+          DYNAMODB_TABLE_NAME: !Ref SmartParkTable
+          BEDROCK_MODEL_ID: !Ref BedrockModelId
+          PARKING_BUFFER_MINUTES: !Ref ParkingBufferMinutes
+          # Allowed CORS origin for the Lambda proxy response header.
+          CORS_ALLOW_ORIGIN: !Ref CorsAllowOrigin
+      Policies:
+        # Least-privilege: READ-ONLY access scoped to the SmartPark table only.
+        # The Lambda never writes to DynamoDB (seeding is a separate script).
+        - DynamoDBReadPolicy:
+            TableName: !Ref SmartParkTable
+        # Permission to invoke Bedrock models for explanation generation.
+        # NOTE: Resource is "*" for the hackathon MVP only. In production this
+        # MUST be scoped to the specific permitted model ARN(s), e.g.
+        # arn:aws:bedrock:<region>::foundation-model/<model-id>, to follow the
+        # principle of least privilege.
+        - Statement:
+            - Effect: Allow
+              Action: bedrock:InvokeModel
+              Resource: "*"
+      Events:
+        # Task 11.3 — API Gateway route declared as an event source.
+        Recommend:
+          Type: Api
+          Properties:
+            Path: /recommend
+            Method: post
+            RestApiId: !Ref SmartParkApi
+
+  # -------------------------------------------------------------------------
+  # Task 11.3 — API Gateway REST API with CORS for the frontend.
+  # -------------------------------------------------------------------------
+  SmartParkApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: prod
+      Cors:
+        AllowMethods: "'POST, OPTIONS'"
+        AllowHeaders: "'Content-Type'"
+        # Preflight (OPTIONS) allow-origin. Kept consistent with the Lambda
+        # response header via the shared CorsAllowOrigin parameter. SAM requires
+        # the value to be single-quoted, so wrap the parameter with !Sub.
+        AllowOrigin: !Sub "'${CorsAllowOrigin}'"
+
+# ---------------------------------------------------------------------------
+# Outputs — printed after deploy for convenience.
+# ---------------------------------------------------------------------------
+Outputs:
+  ApiUrl:
+    Description: Public URL for the SmartPark recommend endpoint
+    Value: !Sub "https://${SmartParkApi}.execute-api.${AWS::Region}.amazonaws.com/prod/recommend"
+  TableName:
+    Description: DynamoDB table name
+    Value: !Ref SmartParkTable
