@@ -78,15 +78,26 @@ def test_lots_with_missing_availability_are_skipped(mocker):
     assert body["alternatives"] == []
 
 
-def test_all_missing_availability_returns_404(mocker):
-    """If every eligible lot lacks data, reuse the no-eligible-lots path."""
+def test_all_missing_availability_returns_422_time_specific(mocker):
+    """
+    If eligible lots exist but NONE have availability data for the requested
+    time, return the distinct 422 no_availability_data response (not the 404
+    no_eligible_lots path), with the time-specific user message.
+    """
     _base_mocks(mocker)
     mocker.patch("shared.db_client.get_availability", return_value=None)
 
     resp = handler.lambda_handler(_event(VALID_BODY), None)
-    assert resp["statusCode"] == 404
+    assert resp["statusCode"] == 422
     body = json.loads(resp["body"])
-    assert body["error"] == "no_eligible_lots"
+    assert body["error"] == "no_availability_data"
+    # Exact user-facing message, including the supported time window.
+    assert body["message"] == (
+        "Availability estimates aren't available for this time yet. "
+        "Please choose a time between 7:00 AM and 5:00 PM."
+    )
+    # Must NOT be conflated with the no-eligible-lots case.
+    assert body["error"] != "no_eligible_lots"
 
 
 def test_real_zero_availability_is_still_scored(mocker):
@@ -132,3 +143,20 @@ def test_normal_daytime_behavior_unaffected(mocker):
     assert body["recommendation"]["lot_name"] == "North Lot"
     assert body["recommendation"]["availability_percentage"] == 80
     assert len(body["alternatives"]) == 2
+
+
+def test_no_eligible_lots_still_returns_404(mocker):
+    """
+    A genuinely ineligible permit (matches no lots) must still return the
+    404 no_eligible_lots path — distinct from the 422 availability-time case.
+    """
+    mocker.patch("shared.db_client.get_building", return_value=BUILDING)
+    mocker.patch("shared.db_client.get_all_lots", return_value=LOTS)
+    # No AWS calls needed beyond eligibility; permit matches nothing.
+    body_req = {**VALID_BODY, "permit_type": "NOPE"}
+
+    resp = handler.lambda_handler(_event(body_req), None)
+    assert resp["statusCode"] == 404
+    body = json.loads(resp["body"])
+    assert body["error"] == "no_eligible_lots"
+    assert body["error"] != "no_availability_data"

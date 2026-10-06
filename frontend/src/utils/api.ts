@@ -36,11 +36,13 @@ export interface RecommendationResponse {
 }
 
 // Thrown when the API returns a non-2xx response. errorType distinguishes
-// the "no eligible lots" case (404) from any other failure, so the UI can
-// show the appropriate message.
+// the "no eligible lots" case (404), the "no availability data for this time"
+// case (422), and any other failure, so the UI can show the right message.
+export type ErrorType = 'no_eligible_lots' | 'no_availability_data' | 'generic'
+
 export class ApiError extends Error {
-  errorType: 'no_eligible_lots' | 'generic'
-  constructor(message: string, errorType: 'no_eligible_lots' | 'generic') {
+  errorType: ErrorType
+  constructor(message: string, errorType: ErrorType) {
     super(message)
     this.name = 'ApiError'
     this.errorType = errorType
@@ -89,6 +91,11 @@ export async function fetchRecommendation(
     // Ignore body parse errors; fall back to the default message.
   }
 
-  const errorType = response.status === 404 ? 'no_eligible_lots' : 'generic'
+  let errorType: ErrorType = 'generic'
+  if (response.status === 404) {
+    errorType = 'no_eligible_lots'
+  } else if (response.status === 422) {
+    errorType = 'no_availability_data'
+  }
   throw new ApiError(message, errorType)
 }

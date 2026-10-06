@@ -12,6 +12,7 @@ from recommendation import arrival_time
 from shared.exceptions import (
     BedrockUnavailableError,
     BuildingNotFoundError,
+    NoAvailabilityDataError,
     NoEligibleLotsError,
 )
 from shared.models import ScoredLot
@@ -203,13 +204,13 @@ def lambda_handler(event: dict, context) -> dict:
                 "availability_percentage": avail,
             })
 
-        # If every eligible lot lacked availability data for the requested
-        # time, there is nothing to recommend. Reuse the existing
-        # no-eligible-lots path (404).
+        # Eligible lots exist, but if NONE have simulated availability data for
+        # the requested time (e.g. an evening time outside the seeded hours),
+        # we must not fabricate data or rank lots without it. Signal this as a
+        # distinct, time-specific condition rather than "no eligible lots".
         if not lots_with_data:
-            raise NoEligibleLotsError(
-                f"No availability data is available for permit type "
-                f"'{permit_type}' at the requested time."
+            raise NoAvailabilityDataError(
+                "No simulated availability data exists for the requested time."
             )
 
         # Step 6: score and select winner
@@ -251,6 +252,14 @@ def lambda_handler(event: dict, context) -> dict:
             400,
             "building_not_found",
             f"Building '{building_id}' was not found. Please check your selection.",
+        )
+
+    except NoAvailabilityDataError:
+        return _error(
+            422,
+            "no_availability_data",
+            "Availability estimates aren't available for this time yet. "
+            "Please choose a time between 7:00 AM and 5:00 PM.",
         )
 
     except NoEligibleLotsError:

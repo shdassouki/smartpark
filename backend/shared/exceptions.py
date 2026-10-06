@@ -21,6 +21,17 @@ class BuildingNotFoundError(Exception):
     """
 
 
+class NoAvailabilityDataError(Exception):
+    """
+    Raised when eligible, permit-valid lots exist but NONE of them have
+    simulated availability data for the requested time (e.g. an evening time
+    outside the seeded hours). This is distinct from NoEligibleLotsError:
+    the problem is the time, not the permit. Maps to HTTP 422 so the frontend
+    can show a time-specific message. The system never fabricates availability
+    or ranks lots without data.
+    """
+
+
 class BedrockUnavailableError(Exception):
     """
     Raised by the Bedrock client when Amazon Bedrock cannot be reached or

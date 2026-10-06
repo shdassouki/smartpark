@@ -11,13 +11,14 @@ import {
   ApiError,
   type RecommendationResponse,
   type RecommendationRequest,
+  type ErrorType,
 } from './utils/api'
 
 type View =
   | { status: 'idle' }
   | { status: 'loading' }
   | { status: 'success'; response: RecommendationResponse }
-  | { status: 'error'; errorType: 'no_eligible_lots' | 'generic'; message: string }
+  | { status: 'error'; errorType: ErrorType; message: string }
 
 function App() {
   const [view, setView] = useState<View>({ status: 'idle' })

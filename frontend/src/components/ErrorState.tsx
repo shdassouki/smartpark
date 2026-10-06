@@ -1,9 +1,14 @@
-// Displays an error. Distinguishes the "no eligible lots" case (suggest
-// checking the permit type) from any other error (generic message + retry).
-// Visual redesign only — behavior unchanged.
+// Displays an error. Distinguishes:
+//   - no_eligible_lots:   permit matches no lots (suggest checking permit)
+//   - no_availability_data: eligible lots exist but no simulated availability
+//                           for the selected time (suggest a supported time)
+//   - generic:            any other failure
+// Presentation only — the message text comes from the API.
+
+import type { ErrorType } from '../utils/api'
 
 interface ErrorStateProps {
-  errorType: 'no_eligible_lots' | 'generic'
+  errorType: ErrorType
   message: string
   onReset: () => void
 }
@@ -22,6 +27,11 @@ export function ErrorState({ errorType, message, onReset }: ErrorStateProps) {
             <h1>No lots available</h1>
             <p>{message}</p>
             <p>Double-check that you selected the right permit type.</p>
+          </>
+        ) : errorType === 'no_availability_data' ? (
+          <>
+            <h1>Try a different time</h1>
+            <p>{message}</p>
           </>
         ) : (
           <>
