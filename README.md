@@ -267,12 +267,12 @@ At 10:30, Shenandoah is two minutes closer, but at 20% predicted availability it
 ```text
 smartpark/
 ├── .kiro/
-│   ├── hooks/                      # Agent hooks (added during submission prep)
+│   ├── hooks/                      # Agent hooks
 │   │   ├── backend-tests-on-save.json
 │   │   ├── confirm-aws-changes.json
 │   │   └── data-honesty-review.json
 │   ├── settings/
-│   │   └── mcp.json                # Project MCP servers (added during submission prep)
+│   │   └── mcp.json                # Project MCP servers
 │   ├── specs/smartpark-mvp/        # requirements.md, design.md, tasks.md, .config.kiro
 │   └── steering/                   # product.md, tech.md, structure.md
 ├── backend/                        # Lambda source (SAM CodeUri)
@@ -282,7 +282,7 @@ smartpark/
 │   ├── tests/                      # pytest suite with AWS mocked (23 tests)
 │   ├── pyproject.toml              # pytest configuration
 │   ├── requirements.txt            # Lambda runtime dependency: boto3
-│   └── requirements-dev.txt        # Test dependencies (added during submission prep)
+│   └── requirements-dev.txt        # Test dependencies
 ├── data/
 │   ├── README.md                   # Dataset description (simulated)
 │   └── seed_dynamo.py              # Builds the seed items; writes them only with --write
