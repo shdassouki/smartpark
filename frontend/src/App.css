@@ -248,7 +248,8 @@
 .field .field-icon { color: var(--blue); flex: none; }
 
 .field select,
-.field input[type='time'] {
+.field input[type='time'],
+.field input[type='date'] {
   width: 100%;
   min-height: 46px;
   padding: 0.55rem 0.65rem;
@@ -262,7 +263,8 @@
   transition: border-color 0.15s, box-shadow 0.15s;
 }
 .field select:focus,
-.field input[type='time']:focus {
+.field input[type='time']:focus,
+.field input[type='date']:focus {
   border-color: var(--blue);
   box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.18);
   outline: none;
@@ -285,7 +287,7 @@
 }
 .select-wrap select { padding-right: 2rem; }
 
-/* Two compact controls side by side (time + permit) */
+/* Two compact controls side by side (date + time) */
 .field-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -597,7 +599,7 @@
 
 /* Respect reduced-motion: disable the small transitions. */
 @media (prefers-reduced-motion: reduce) {
-  .btn-primary, .btn-secondary, .field select, .field input[type='time'] {
+  .btn-primary, .btn-secondary, .field select, .field input[type='time'], .field input[type='date'] {
     transition: none;
   }
 }

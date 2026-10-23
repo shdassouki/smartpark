@@ -2,7 +2,7 @@
 
 import json
 import os
-from datetime import datetime, date
+from datetime import datetime
 
 import shared.db_client as db_client
 import shared.bedrock_client as bedrock_client
@@ -86,8 +86,7 @@ def _parse_start_time(start_time_str: str) -> datetime | None:
     Parse a start time string into a datetime.
 
     Accepts:
-      - HH:MM (24-hour), e.g. "09:00" — date defaults to today
-      - ISO 8601 datetime, e.g. "2025-09-15T09:00:00"
+      - ISO 8601 datetime, e.g. "2025-09-15T09:00:00" or "2025-09-15T09:00"
 
     Returns None if the string cannot be parsed.
     """
@@ -96,12 +95,6 @@ def _parse_start_time(start_time_str: str) -> datetime | None:
             return datetime.strptime(start_time_str, fmt)
         except ValueError:
             pass
-
-    try:
-        t = datetime.strptime(start_time_str, "%H:%M").time()
-        return datetime.combine(date.today(), t)
-    except ValueError:
-        pass
 
     return None
 
@@ -143,7 +136,7 @@ def _parse_request(event: dict) -> tuple[dict | None, dict | None]:
         return None, _error(
             400,
             "validation_error",
-            "Invalid start_time format. Use HH:MM (e.g. '09:00') or ISO 8601 (e.g. '2025-09-15T09:00:00').",
+            "Invalid start_time format. Use ISO 8601 (e.g. '2025-09-15T09:00:00' or '2025-09-15T09:00').",
             fields=["start_time"],
         )
 

@@ -45,7 +45,7 @@ def _build_prompt(
     Build the structured prompt sent to Bedrock.
 
     Availability is presented as a percentage. The prompt explicitly states
-    that data is simulated/historical and instructs the model not to invent
+    that data is simulated (prototype) and instructs the model not to invent
     any facts not provided.
     """
     runner_up_lines = ""
@@ -66,7 +66,7 @@ def _build_prompt(
         f"- Estimated walking time: {winner.walking_time_minutes:.0f} minutes\n\n"
         f"Runner-up lots considered:\n"
         f"{runner_up_lines}\n"
-        "IMPORTANT: The availability data above is simulated/historical prototype data, "
+        "IMPORTANT: The availability data above is simulated prototype data, "
         "not live or real-time information. Do not invent, infer, or describe any parking "
         "conditions, lot details, or facts that are not explicitly provided above.\n\n"
         f"Write a 2-3 sentence explanation for the student describing why {winner.lot.name} "

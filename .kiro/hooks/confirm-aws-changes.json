@@ -1,0 +1,14 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Confirm before changing AWS resources",
+      "trigger": "PreToolUse",
+      "matcher": "^(execute_bash|control_bash_process)$",
+      "action": {
+        "type": "command",
+        "command": "python3 -c 'import sys,json; t=sys.stdin.read(); any(p in t for p in (\"sam deploy\",\"sam delete\",\"sam sync\",\"aws dynamodb delete-table\")) and print(json.dumps({\"hookSpecificOutput\": {\"permissionDecision\": \"ask\", \"permissionDecisionReason\": \"This command may modify or delete live AWS resources. Confirm before proceeding.\"}}))'"
+      }
+    }
+  ]
+}

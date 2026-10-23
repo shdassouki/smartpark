@@ -9,7 +9,7 @@ import { useState } from 'react'
 import { BUILDING_OPTIONS, PERMIT_OPTIONS } from '../utils/options'
 import type { RecommendationRequest } from '../utils/api'
 import { DisclaimerBanner } from './DisclaimerBanner'
-import { PinIcon, ClockIcon, ShieldIcon, ChevronIcon, ArrowIcon } from './icons'
+import { PinIcon, CalendarIcon, ClockIcon, ShieldIcon, ChevronIcon, ArrowIcon } from './icons'
 
 interface InputFormProps {
   onSubmit: (request: RecommendationRequest) => void
@@ -18,6 +18,7 @@ interface InputFormProps {
 
 export function InputForm({ onSubmit, disabled }: InputFormProps) {
   const [buildingId, setBuildingId] = useState('')
+  const [startDate, setStartDate] = useState('')
   const [startTime, setStartTime] = useState('')
   const [permitType, setPermitType] = useState('')
   const [errors, setErrors] = useState<string[]>([])
@@ -27,6 +28,7 @@ export function InputForm({ onSubmit, disabled }: InputFormProps) {
 
     const missing: string[] = []
     if (!buildingId) missing.push('destination building')
+    if (!startDate) missing.push('class/event date')
     if (!startTime) missing.push('class/event start time')
     if (!permitType) missing.push('permit type')
 
@@ -36,9 +38,12 @@ export function InputForm({ onSubmit, disabled }: InputFormProps) {
     }
 
     setErrors([])
+    // Plain string template — no Date/UTC conversion. Combines the picked
+    // date and time inputs verbatim into YYYY-MM-DDTHH:MM:SS.
+    const start_time = `${startDate}T${startTime}:00`
     onSubmit({
       building_id: buildingId,
-      start_time: startTime,
+      start_time,
       permit_type: permitType,
     })
   }
@@ -85,8 +90,22 @@ export function InputForm({ onSubmit, disabled }: InputFormProps) {
           </div>
         </div>
 
-        {/* Time + permit — two compact app-style controls side by side */}
+        {/* Date + time — two compact app-style controls side by side */}
         <div className="field-row">
+          <div className="field tile">
+            <label htmlFor="start-date">
+              <CalendarIcon className="field-icon" />
+              Class/event date
+            </label>
+            <input
+              id="start-date"
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              disabled={disabled}
+            />
+          </div>
+
           <div className="field tile">
             <label htmlFor="start-time">
               <ClockIcon className="field-icon" />
@@ -100,28 +119,28 @@ export function InputForm({ onSubmit, disabled }: InputFormProps) {
               disabled={disabled}
             />
           </div>
+        </div>
 
-          <div className="field tile">
-            <label htmlFor="permit">
-              <ShieldIcon className="field-icon" />
-              Permit type
-            </label>
-            <div className="select-wrap">
-              <select
-                id="permit"
-                value={permitType}
-                onChange={(e) => setPermitType(e.target.value)}
-                disabled={disabled}
-              >
-                <option value="">Select…</option>
-                {PERMIT_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-              <ChevronIcon className="select-chevron" />
-            </div>
+        <div className="field tile">
+          <label htmlFor="permit">
+            <ShieldIcon className="field-icon" />
+            Permit type
+          </label>
+          <div className="select-wrap">
+            <select
+              id="permit"
+              value={permitType}
+              onChange={(e) => setPermitType(e.target.value)}
+              disabled={disabled}
+            >
+              <option value="">Select…</option>
+              {PERMIT_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+            <ChevronIcon className="select-chevron" />
           </div>
         </div>
 

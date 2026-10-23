@@ -9,9 +9,19 @@ Parameters:
   BedrockModelId:
     Type: String
     Description: >-
-      Bedrock model ID used for recommendation explanations. Chosen at deploy
-      time based on supported models, region, and cost. Not hardcoded.
-    Default: ""
+      Bedrock model ID (or inference profile ID) used for recommendation
+      explanations, passed to the Converse API at runtime. For the current
+      deployment this is the US cross-region inference profile
+      "us.anthropic.claude-haiku-4-5-20251001-v1:0".
+    Default: "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+  BedrockFoundationModelId:
+    Type: String
+    Description: >-
+      The underlying foundation-model ID (without the "us." inference-profile
+      prefix). Used only to scope the IAM policy to the specific foundation
+      model the US inference profile routes to. Keep in sync with
+      BedrockModelId.
+    Default: "anthropic.claude-haiku-4-5-20251001-v1:0"
   ParkingBufferMinutes:
     Type: String
     Description: Minutes reserved for finding a spot after arriving at the lot.
@@ -77,15 +87,24 @@ Resources:
         # The Lambda never writes to DynamoDB (seeding is a separate script).
         - DynamoDBReadPolicy:
             TableName: !Ref SmartParkTable
-        # Permission to invoke Bedrock models for explanation generation.
-        # NOTE: Resource is "*" for the hackathon MVP only. In production this
-        # MUST be scoped to the specific permitted model ARN(s), e.g.
-        # arn:aws:bedrock:<region>::foundation-model/<model-id>, to follow the
-        # principle of least privilege.
+        # Permission to invoke Bedrock for explanation generation only,
+        # scoped to the Claude Haiku 4.5 US inference profile and the specific
+        # foundation-model ARNs that the US profile routes to. The Converse
+        # API authorizes under bedrock:InvokeModel /
+        # bedrock:InvokeModelWithResponseStream. Least privilege — no wildcard
+        # model access.
         - Statement:
             - Effect: Allow
-              Action: bedrock:InvokeModel
-              Resource: "*"
+              Action:
+                - bedrock:InvokeModel
+                - bedrock:InvokeModelWithResponseStream
+              Resource:
+                # The US cross-region inference profile (this stack's region).
+                - !Sub "arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/${BedrockModelId}"
+                # Foundation-model ARNs the US profile can route to.
+                - !Sub "arn:aws:bedrock:us-east-1::foundation-model/${BedrockFoundationModelId}"
+                - !Sub "arn:aws:bedrock:us-east-2::foundation-model/${BedrockFoundationModelId}"
+                - !Sub "arn:aws:bedrock:us-west-2::foundation-model/${BedrockFoundationModelId}"
       Events:
         # Task 11.3 — API Gateway route declared as an event source.
         Recommend:

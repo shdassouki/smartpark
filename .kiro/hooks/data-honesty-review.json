@@ -1,0 +1,14 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Data honesty copy review",
+      "trigger": "PostFileSave",
+      "matcher": "frontend/src/(components/.*|App)\\.tsx$",
+      "action": {
+        "type": "agent",
+        "prompt": "A SmartPark frontend file was just saved. Review only the user-facing copy in that file: JSX text, headings, labels, button text, aria-labels, and string literals shown in the UI. Per the Data Honesty section of .kiro/steering/product.md, parking availability must be described as predicted from simulated/historical data. Wording such as 'simulated', 'predicted', or 'estimated' is acceptable; the word 'historical' is not required. Flag any copy that presents availability as live, real-time, or current conditions, or that claims individual spot availability (for example 'live', 'real-time', 'right now', 'spots open', or a count of free spaces). For each issue, quote the line and suggest a minimal wording fix, but do not edit the file. If the copy is fine, reply in one short sentence that no data-honesty issues were found."
+      }
+    }
+  ]
+}
