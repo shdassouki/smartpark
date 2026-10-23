@@ -6,7 +6,7 @@ SmartPark helps university commuter students pick one parking lot for their next
 
 **Live app:** <https://main.d2mh5kfdhenw0s.amplifyapp.com>
 
-**Demo video:** _not recorded yet._
+**▶ Demo video:** <https://youtu.be/T2a895gpElw>
 
 ## Contents
 
