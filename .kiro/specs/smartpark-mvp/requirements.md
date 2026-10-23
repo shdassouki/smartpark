@@ -16,10 +16,10 @@ SmartPark is a mobile-friendly web application for university commuter students.
 - **Fallback_Explainer**: The deterministic text-generation component used when Amazon Bedrock is unavailable.
 - **DynamoDB**: The Amazon DynamoDB database storing parking lot data, building data, and permit eligibility rules.
 - **Lot**: A university parking lot with a name, location, permit types accepted, and historical availability data.
-- **Building**: A campus destination building with a name and geographic coordinates.
+- **Building**: A campus destination building with a name. (Implementation note: the prototype stores no geographic coordinates for buildings or lots; walking times are precomputed per lot/building pair at seed time instead.)
 - **Permit_Type**: A category of parking permit that determines which lots a student may use. Valid permit types are defined by the seeded prototype dataset and are configurable — not hardcoded in application logic.
 - **Eligibility_Filter**: The hard filter that removes all lots for which the student's permit type is not accepted.
-- **Availability_Score**: A numeric value between 0.0 and 1.0 representing predicted parking availability for a lot at a given time, derived from historical data.
+- **Availability_Score**: An integer percentage from 0 to 100 representing predicted parking availability for a lot at a given time, derived from simulated/historical data (higher = more available). (Implementation note: stored and scored as an integer 0–100 — `availability_score` in the seed, `availability_percentage` in the code — to feed the scoring formula directly.)
 - **Walking_Time**: The estimated walking time in minutes from a parking lot to a destination building.
 - **Composite_Score**: The final numeric score assigned to each eligible lot, computed by the Recommendation_Engine from Availability_Score and Walking_Time.
 - **Recommendation**: The single best lot selected by the Recommendation_Engine, including its name, Composite_Score, arrival time guidance, and plain-language explanation.
@@ -38,7 +38,7 @@ SmartPark is a mobile-friendly web application for university commuter students.
 #### Acceptance Criteria
 
 1. THE Frontend SHALL display an input form containing a destination building selector, a class/event start time input, and a parking permit type selector.
-2. WHEN the student submits the form with all required fields populated, THE Frontend SHALL send the destination building identifier, class/event start time, and permit type to the API.
+2. WHEN the student submits the form with all required fields populated, THE Frontend SHALL send the destination building identifier, class/event start time, and permit type to the API. (Implementation note: the frontend sends the start time as a bare 24-hour `HH:MM` value.)
 3. IF the student submits the form with one or more required fields empty, THEN THE Frontend SHALL display a descriptive validation message identifying each missing field and SHALL NOT submit the request to the API.
 4. THE Frontend SHALL present the permit type selector as a discrete list of valid permit types sourced from the available data, not as a free-text field.
 5. THE Frontend SHALL present the destination building selector as a discrete list of buildings sourced from the available data, not as a free-text field.
@@ -53,7 +53,7 @@ SmartPark is a mobile-friendly web application for university commuter students.
 
 1. WHEN the Recommendation_Engine receives a request, THE Recommendation_Engine SHALL apply the Eligibility_Filter as the first step before any scoring is performed.
 2. THE Eligibility_Filter SHALL remove every Lot whose accepted permit types do not include the student's Permit_Type.
-3. IF the Eligibility_Filter removes all Lots and zero eligible lots remain, THEN THE Recommendation_Engine SHALL return an error response indicating no eligible lots are available for the given permit type and time.
+3. IF the Eligibility_Filter removes all Lots and zero eligible lots remain, THEN THE Recommendation_Engine SHALL return a 404 error response indicating no eligible lots are available for the given permit type. (Implementation note: the separate case where eligible lots exist but none has availability data at its arrival slot is handled by the 422 `no_availability_data` response — see Req 9.6.)
 4. THE Recommendation_Engine SHALL NOT include any ineligible Lot in the Composite_Score calculation or in the Recommendation.
 
 ---
@@ -132,7 +132,7 @@ SmartPark is a mobile-friendly web application for university commuter students.
 
 #### Acceptance Criteria
 
-1. THE DynamoDB SHALL store at minimum: Lot records (name, accepted permit types, geographic coordinates, historical availability by time-of-day and day-of-week), Building records (name, geographic coordinates), and Permit eligibility rule records.
+1. THE DynamoDB SHALL store at minimum: Lot records (name, accepted permit types, historical availability by time-of-day and day-of-week), Building records (name), Walking Time records per lot/building pair, and Permit eligibility rule records. (Implementation note: the prototype does not store geographic coordinates; walking times are precomputed per lot/building pair at seed time instead of derived from coordinates.)
 2. THE System SHALL include seed data containing at least five Lots and at least three Buildings with realistic university campus values.
 
 ---
@@ -144,7 +144,9 @@ SmartPark is a mobile-friendly web application for university commuter students.
 #### Acceptance Criteria
 
 1. THE API SHALL expose a single endpoint that accepts a POST request containing the destination building identifier, class/event start time, and permit type.
+1a. THE API SHALL accept the class/event start time as either a bare 24-hour time (`HH:MM`) or a full ISO 8601 datetime (`YYYY-MM-DDTHH:MM:SS` or `YYYY-MM-DDTHH:MM`). WHEN the start time is a bare `HH:MM`, THE API SHALL resolve it to the current date in the campus timezone (the `CAMPUS_TIMEZONE` environment variable, default `America/New_York`), not the server's UTC date.
 2. WHEN the API receives a valid request, THE API SHALL return a JSON response containing the recommended Lot name, Arrival_Time, Explanation, and a disclaimer flag indicating that availability data is simulated.
 3. WHEN the API receives a request with missing or malformed required fields, THE API SHALL return a 400 status code and a JSON error body describing which fields are invalid.
 4. WHEN the Recommendation_Engine encounters an internal error, THE API SHALL return a 500 status code and a JSON error body with a descriptive message.
-5. IF no eligible Lots exist for the given permit type and time, THEN THE API SHALL return a 404 status code and a JSON error body indicating no eligible lots were found.
+5. IF no eligible Lots exist for the given permit type, THEN THE API SHALL return a 404 status code and a JSON error body indicating no eligible lots were found.
+6. IF eligible Lots exist but none has simulated availability data at its computed arrival slot, THEN THE API SHALL return a 422 status code with the `no_availability_data` error, distinct from the 404 case. (Implementation note: this distinction was added in commit `6ab0839`; the frontend surfaces it as a separate "Try a different time" screen.)

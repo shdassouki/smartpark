@@ -164,6 +164,7 @@ This plan converts the SmartPark MVP design into incremental coding tasks. The i
     - Call Bedrock `invoke_model` passing the model ID from `BEDROCK_MODEL_ID` at runtime — do not hardcode any specific model name
     - Raise `BedrockUnavailableError` on any Bedrock exception
     - _Requirements: 5.1, 5.2, 5.5_
+    - Implementation note: the code uses the Bedrock **Converse API** (`client.converse(...)`) rather than `invoke_model`, and reads `BEDROCK_MODEL_ID` on first use (not at module load) so modules import cleanly in tests (`backend/shared/bedrock_client.py`).
 
   - [ ]* 8.4 Write unit tests for `bedrock_client.py`
     - Mock `boto3` Bedrock runtime; verify the prompt is well-formed and `invoke_model` is called with the model ID from `BEDROCK_MODEL_ID`
@@ -178,7 +179,7 @@ This plan converts the SmartPark MVP design into incremental coding tasks. The i
     - Validate `building_id` resolves via `db_client.get_building`; return 400 with `BuildingNotFoundError` mapping if not found
     - _Requirements: 1.2, 1.3, 9.1, 9.3_
 
-  - [ ] 9.2 Implement the per-lot candidate arrival time availability pipeline in `handler.py`
+  - [x] 9.2 Implement the per-lot candidate arrival time availability pipeline in `handler.py`
     - After validation, fetch all lots via `db_client.get_all_lots()` and apply `eligibility.filter_eligible_lots()`
     - For each eligible lot, execute this pipeline in order:
       1. Call `db_client.get_walking_time(lot_id, building_id)` to retrieve that lot's `walking_time_minutes`
@@ -222,6 +223,7 @@ This plan converts the SmartPark MVP design into incremental coding tasks. The i
     - Environment variables: `DYNAMODB_TABLE_NAME`, `PARKING_BUFFER_MINUTES`, `BEDROCK_MODEL_ID`
     - Grant Lambda IAM permissions: `dynamodb:GetItem`, `dynamodb:Scan`, `bedrock:InvokeModel`
     - _Requirements: 9.1, 4.2, 5.1_
+    - Implementation note: the `bedrock:InvokeModel` (and `bedrock:InvokeModelWithResponseStream`) permission is the correct IAM action for the Converse API; it is scoped to the US inference profile and the foundation-model ARNs it routes to, not a wildcard (`infra/template.yaml`).
 
   - [x] 11.3 Define API Gateway REST API
     - Single resource `/recommend` with `POST` method using Lambda proxy integration
@@ -233,32 +235,33 @@ This plan converts the SmartPark MVP design into incremental coding tasks. The i
     - _Requirements: 9.1, 9.2_
 
 - [x] 12. Seed DynamoDB with prototype data
-  - [x] 12.1 Write seed script `scripts/seed_dynamodb.py`
+  - [x] 12.1 Write seed script `data/seed_dynamo.py`
     - Seed at least 5 Lot records with `name`, `accepted_permit_types`
     - Seed at least 3 Building records
-    - Seed Availability records for each lot covering MON–FRI, hours `07`–`21`
+    - Seed Availability records for each lot covering MON–FRI, hours `07`–`17`
     - Seed Walking Time records for each (lot, building) pair
     - Seed Permit Type records for each valid permit type
     - _Requirements: 8.1, 8.2_
+    - Implementation note: the script lives at `data/seed_dynamo.py` (not `scripts/seed_dynamodb.py`) and seeds weekday hours `07`–`17` (`range(7, 18)`), 300 items total; it dry-runs by default and writes only with `--write`.
 
   - [ ]* 12.2 Write unit test for seed script
     - Mock boto3; verify correct `PK`/`SK` patterns are written for each entity type
     - _Requirements: 8.1_
 
-- [ ] 13. Implement `RecommendationResult` and `DisclaimerBanner` frontend components
-  - [ ] 13.1 Implement `DisclaimerBanner` component
+- [x] 13. Implement `RecommendationResult` and `DisclaimerBanner` frontend components
+  - [x] 13.1 Implement `DisclaimerBanner` component
     - Render a visually distinct, non-dismissible banner with text: *"Availability data is simulated/historical and is not live or real-time."*
     - _Requirements: 6.2, 6.3_
 
-  - [ ] 13.2 Implement `RecommendationResult` component
+  - [x] 13.2 Implement `RecommendationResult` component
     - Render lot name, arrival time using prescribed phrasing: *"Arrive at the lot by [Arrival_Time] to make it to class on time, including time to find a spot."*
     - Render the plain-language explanation
     - Always render `DisclaimerBanner`
     - Provide a "Search again" affordance that calls an `onReset` prop
     - _Requirements: 6.1, 4.4_
 
-- [ ] 14. Implement `ErrorState` frontend component
-  - [ ] 14.1 Implement `ErrorState` component
+- [x] 14. Implement `ErrorState` frontend component
+  - [x] 14.1 Implement `ErrorState` component
     - Accept `errorType: "no_eligible_lots" | "generic"` and `onReset: () => void` props
     - For `no_eligible_lots`: display message informing no lots are available; suggest verifying permit type
     - For `generic`: display a descriptive error message; provide a button to return to `InputForm`
@@ -269,8 +272,8 @@ This plan converts the SmartPark MVP design into incremental coding tasks. The i
     - Render with `generic`; assert return-to-form button present
     - _Requirements: 6.4, 6.5_
 
-- [ ] 15. Implement `InputForm` frontend component
-  - [ ] 15.1 Implement `InputForm` component
+- [x] 15. Implement `InputForm` frontend component
+  - [x] 15.1 Implement `InputForm` component
     - Controlled selectors for building (loaded from API or static config) and permit type (loaded from API or static config)
     - Controlled time input for class/event start time
     - On submit with missing fields: display field-level error messages; do not call the API
@@ -283,14 +286,14 @@ This plan converts the SmartPark MVP design into incremental coding tasks. The i
     - Submit valid form: assert POST fired with correct payload
     - _Requirements: 1.2, 1.3_
 
-- [ ] 16. Implement `App` root component and responsive layout
-  - [ ] 16.1 Implement `App` component
+- [x] 16. Implement `App` root component and responsive layout
+  - [x] 16.1 Implement `App` component
     - Manage top-level view state: `idle | loading | success | error`
     - Render `InputForm` in `idle` and `loading` states; `RecommendationResult` in `success`; `ErrorState` in `error`
     - Pass callbacks and API response data to child components
     - _Requirements: 1.1, 6.1, 6.4, 6.5_
 
-  - [ ] 16.2 Apply responsive CSS
+  - [x] 16.2 Apply responsive CSS
     - Layouts render correctly from 320px to 1440px viewport width without horizontal scrolling
     - Use relative units, flexbox or CSS grid
     - _Requirements: 7.1, 7.3_

@@ -114,7 +114,9 @@ AWS Amplify Hosting serves the compiled React/Vite frontend as static assets. Al
 - Input: list of eligible Lots with their precomputed walking times to the destination building, and availability percentages for the requested time slot.
 - Output: list of `(lot, composite_score)` tuples, sorted descending by score, with walking time as tiebreaker.
 - Pure function — no I/O, fully deterministic.
-- Defines `WALK_PENALTY` as a named constant (default `10`); this constant can be adjusted without changing formula logic.
+- Defines `WALK_PENALTY`, `LOW_AVAIL_THRESHOLD`, and `LOW_AVAIL_PENALTY` as named constants; these can be adjusted without changing formula logic.
+
+> Implementation note: the finalized constants in `scoring.py` are `WALK_PENALTY = 6`, `LOW_AVAIL_THRESHOLD = 40`, and `LOW_AVAIL_PENALTY = 20`, and the formula adds an extra deduction for lots below the low-availability threshold (see the Composite_Score formula below). `tasks.md` 5.1 matches this.
 
 #### `recommendation/arrival_time.py`
 - Computes `Arrival_Time` from `start_time`, `walking_time_minutes`, and `parking_buffer_minutes`.
@@ -125,13 +127,15 @@ AWS Amplify Hosting serves the compiled React/Vite frontend as static assets. Al
 - Wraps DynamoDB reads. Exposes:
   - `get_all_lots()` → list of Lot records
   - `get_building(building_id)` → single Building record
-  - `get_availability(lot_id, day_of_week, hour)` → `availability_percentage` (integer 0–100)
+  - `get_availability(lot_id, day_of_week, hour)` → `availability_percentage` (integer 0–100), or `None` when no record exists for that slot (kept distinct from a stored `0`, which the handler uses to skip lots with no data)
   - `get_walking_time(lot_id, building_id)` → `walking_time_minutes` (float)
 
 #### `shared/bedrock_client.py`
-- Calls Amazon Bedrock (Claude model via Bedrock's `invoke_model` API) with a structured prompt.
+- Calls Amazon Bedrock (Claude model via the Bedrock **Converse API**, `client.converse(...)`) with a structured prompt, using `inferenceConfig` `maxTokens=300` and `temperature=0.3`.
 - Returns the explanation string.
 - Raises `BedrockUnavailableError` on any Bedrock exception.
+
+> Implementation note: the code uses the Converse API (`converse`), not `invoke_model`, and reads `BEDROCK_MODEL_ID` on first use (raising a configuration error if unset) rather than at module load, so the module imports cleanly in tests.
 
 #### `shared/fallback_explainer.py`
 - Pure function. Takes `winner_lot`, `runner_up_lots` (up to 2), and returns a deterministic explanation string.
@@ -168,7 +172,9 @@ All entities share one table using a generic `PK` / `SK` key scheme.
 | `availability_score` | Number | Integer 0–100; higher = more available |
 
 `day_of_week` values: `MON`, `TUE`, `WED`, `THU`, `FRI`, `SAT`, `SUN`
-`hour` values: zero-padded 24-hour integer, `"07"` through `"21"`.
+`hour` values: zero-padded 24-hour integer.
+
+> Implementation note: the seed dataset (`data/seed_dynamo.py`) covers weekdays `MON`–`FRI` only, hours `"07"` through `"17"`.
 
 > Note: `availability_score` is stored as an integer 0–100 (availability_percentage) to match the scoring formula directly, avoiding a unit conversion step at query time.
 
@@ -225,21 +231,26 @@ Walking time for each (lot, building) pair is a precomputed simulated estimate s
 
 ```
 composite_score = availability_percentage - (WALK_PENALTY * walking_time_minutes)
+if availability_percentage < LOW_AVAIL_THRESHOLD:
+    composite_score -= LOW_AVAIL_PENALTY
 ```
 
 Where:
 - `availability_percentage` is an integer 0–100 from the Availability Record (higher = more available)
 - `walking_time_minutes` is the precomputed simulated estimate from the Walking Time Record
-- `WALK_PENALTY` is a named constant defined in `scoring.py`, default value `10`
+- `WALK_PENALTY` is a named constant defined in `scoring.py`, value `6`
+- `LOW_AVAIL_THRESHOLD` is `40` and `LOW_AVAIL_PENALTY` is `20`: lots predicted below 40% availability take an extra 20-point deduction, so a nearly-full lot can't win on a short walk alone
 
 **Walk Penalty calibration:**
 
-`WALK_PENALTY = 10` is a configurable prototype parameter, not an empirically validated constant. It was chosen to make availability differences of ~10 percentage points comparable in weight to a 1-minute difference in walking time. It is defined as a named constant in `scoring.py` and can be adjusted without changing formula logic.
+`WALK_PENALTY = 6` is a configurable prototype parameter, not an empirically validated constant. It weighs availability against walking time so neither factor decides the winner on its own; the extra `LOW_AVAIL_PENALTY` further discourages lots that are predicted nearly full. The constants are defined by name in `scoring.py` and can be adjusted without changing formula logic.
+
+> Implementation note: the extra low-availability deduction and `WALK_PENALTY = 6` were finalized in code (`scoring.py`); `tasks.md` 5.1 matches.
 
 **Example scores:**
-- Lot A: availability=80, walk=3 min → 80 − (10×3) = **50**
-- Lot B: availability=60, walk=1 min → 60 − (10×1) = **50** → tie; Lot B wins (shorter walk)
-- Lot C: availability=90, walk=5 min → 90 − (10×5) = **40** → loses to both despite highest availability
+- Lot A: availability=80, walk=3 min → 80 − (6×3) = **62**
+- Lot B: availability=60, walk=1 min → 60 − (6×1) = **54** → loses to Lot A despite the shorter walk
+- Lot C: availability=35, walk=1 min → 35 − (6×1) − 20 (below 40%) = **9** → loses badly despite the shortest walk
 
 **Tiebreaker:** When two lots share the same `composite_score`, the lot with the smaller `walking_time_minutes` is ranked higher (Req 3.6).
 
@@ -253,7 +264,7 @@ arrival_time = start_time - timedelta(minutes=walking_time_minutes + parking_buf
 
 - `parking_buffer_minutes` is sourced from the `PARKING_BUFFER_MINUTES` environment variable (default: `5`).
 - The result is formatted as a 12-hour clock string with AM/PM: `"8:45 AM"`.
-- `start_time` is passed as an ISO 8601 string (e.g., `"2025-09-15T09:00:00"`) and parsed in the Lambda handler. If the student provides only a time-of-day (HH:MM), the handler uses the current date in the local campus timezone.
+- `start_time` is parsed in the Lambda handler. It accepts either a bare 24-hour time (`HH:MM`) or a full ISO 8601 datetime (`YYYY-MM-DDTHH:MM:SS` or `YYYY-MM-DDTHH:MM`). A bare `HH:MM` is resolved to the current date in the campus timezone (the `CAMPUS_TIMEZONE` environment variable, default `America/New_York`; an unknown name falls back to `America/New_York`), returning a naive datetime — not the server's UTC date.
 
 ---
 
@@ -281,20 +292,39 @@ Content-Type: `application/json`
 
 ```json
 {
-  "lot_name": "string",
-  "arrival_time": "string",
-  "explanation": "string",
-  "simulated_data": true
+  "recommendation": {
+    "lot_name": "string",
+    "availability_percentage": 0,
+    "walking_time_minutes": 0.0,
+    "permit_eligible": true,
+    "arrival_time": "string",
+    "explanation": "string",
+    "simulated_data": true
+  },
+  "alternatives": [
+    {
+      "lot_name": "string",
+      "availability_percentage": 0,
+      "walking_time_minutes": 0.0,
+      "permit_eligible": true
+    }
+  ]
 }
 ```
+
+> Implementation note: the response is a nested `recommendation` object plus an `alternatives` array of up to two runner-ups (in rank order). `permit_eligible` is always `true` because only eligible lots are scored. The internal composite score is never exposed.
 
 ### Error Responses
 
 | HTTP Status | Condition | Response body shape |
 |---|---|---|
 | `400 Bad Request` | Missing or malformed required field(s) | `{"error": "validation_error", "message": "...", "fields": ["field1", ...]}` |
+| `400 Bad Request` | `building_id` does not resolve to a record | `{"error": "building_not_found", "message": "..."}` |
 | `404 Not Found` | No eligible lots for the given permit type | `{"error": "no_eligible_lots", "message": "No parking lots are available for permit type <X> at this time."}` |
+| `422 Unprocessable Entity` | Eligible lots exist, but none has simulated availability data at its arrival slot | `{"error": "no_availability_data", "message": "..."}` |
 | `500 Internal Server Error` | Unhandled Lambda exception | `{"error": "internal_error", "message": "An unexpected error occurred. Please try again."}` |
+
+> Implementation note: the `422 no_availability_data` case was split out from the generic 404 in commit `6ab0839`, so "no lots for this permit" and "no data for this time" surface as distinct responses and distinct frontend screens.
 
 ### Validation Rules (enforced by `handler.py`)
 
@@ -308,7 +338,7 @@ Content-Type: `application/json`
 
 ### When Bedrock Is Called
 
-Bedrock is called **only after** the recommendation winner has been selected and `Arrival_Time` has been computed. It receives structured data and returns only an explanation string. It has no influence on ranking or selection.
+Bedrock is called (through the Converse API) **only after** the recommendation winner has been selected and `Arrival_Time` has been computed. It receives structured data and returns only an explanation string. It has no influence on ranking or selection.
 
 ### Prompt Structure
 
@@ -370,6 +400,7 @@ def _describe_availability(percentage):
 | Missing request field | `handler.py` validation | 400, field list in body |
 | Unknown `building_id` | `db_client.get_building()` raises `BuildingNotFoundError` | 400 |
 | No eligible lots | `eligibility.py` raises `NoEligibleLotsError` | 404 |
+| No availability data for any eligible lot | `NoAvailabilityDataError` (added in `6ab0839`) | 422 |
 | DynamoDB read failure | Logged; re-raised as `InternalError` | 500 |
 | Bedrock unavailable | `BedrockUnavailableError` caught; fallback invoked | 200 (recommendation still returned) |
 | Unhandled exception | Lambda top-level try/except logs and returns 500 | 500 |

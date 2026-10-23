@@ -235,7 +235,7 @@ smartpark/
 │   ├── handler.py                  # Entry point: validation and pipeline
 │   ├── recommendation/             # eligibility.py, scoring.py, arrival_time.py (no I/O)
 │   ├── shared/                     # db_client.py, bedrock_client.py, fallback_explainer.py, models.py, exceptions.py
-│   ├── tests/                      # pytest suite with AWS mocked (17 tests)
+│   ├── tests/                      # pytest suite with AWS mocked (23 tests)
 │   ├── pyproject.toml              # pytest configuration
 │   ├── requirements.txt            # Lambda runtime dependency: boto3
 │   └── requirements-dev.txt        # Test dependencies (added during submission prep)
@@ -331,7 +331,7 @@ The MVP has one Kiro spec, `smartpark-mvp`. Its `.config.kiro` records `"workflo
 - **[design.md](.kiro/specs/smartpark-mvp/design.md)** covers the architecture, component and module contracts, the single-table data model and access patterns, the API contract, the Bedrock prompt and fallback, error handling, the testing strategy, and 9 correctness properties written for property-based testing. Each property names the requirements it validates.
 - **[tasks.md](.kiro/specs/smartpark-mvp/tasks.md)** has 19 top-level tasks. Every sub-task is tagged with the requirements it covers (`_Requirements: 2.1, 2.2_`), optional test tasks are marked `*`, there are four checkpoints, and a dependency graph groups the tasks into 12 waves.
 
-**Task status.** 6 of 19 top-level tasks and 21 of 63 checkboxes are ticked, but the boxes lag the code. Tasks 9.2, 13.1, 13.2, 14.1, 15.1, 16.1, and 16.2 are implemented but unticked: the per-lot handler pipeline, the frontend components, and the responsive CSS. Besides the four checkpoints, two required tasks are still open: 8.2 (dedicated `fallback_explainer.py` unit tests; the fallback is only covered through handler tests) and 18.1 (integration tests against a running API). All 20 optional `*` tasks are unticked. Existing tests partly cover 3.2, 8.4, and 9.4, but none of the Hypothesis property tests (4.2, 5.2 to 5.6, 6.2, 6.3, 9.3) were written; `hypothesis` stays in `requirements-dev.txt` for them.
+**Task status.** 10 of 19 top-level tasks and 32 of 63 checkboxes are ticked. This documentation pass reconciled the checkboxes with the code: tasks 9.2, 13.1, 13.2, 14.1, 15.1, 16.1, and 16.2 (the per-lot handler pipeline, the frontend components, and the responsive CSS) were implemented but had been left unticked, and are now ticked. Besides the four checkpoints, two required tasks are still open: 8.2 (dedicated `fallback_explainer.py` unit tests; the fallback is only covered through handler tests) and 18.1 (integration tests against a running API). All 20 optional `*` tasks are unticked. Existing tests partly cover 3.2, 8.4, and 9.4, but none of the Hypothesis property tests (4.2, 5.2 to 5.6, 6.2, 6.3, 9.3) were written; `hypothesis` stays in `requirements-dev.txt` for them.
 
 **Traceability**
 
@@ -349,22 +349,18 @@ The MVP has one Kiro spec, `smartpark-mvp`. Its `.config.kiro` records `"workflo
 
 **Where the code differs from the spec**
 
+This documentation pass reconciled most of the earlier drift into the spec itself — the scoring constants (`WALK_PENALTY = 6` plus the low-availability penalty), the nested response shape and `alternatives` list, the 422 `no_availability_data` case, the Bedrock Converse API, the seed script path and `07`–`17` hours, and the no-coordinates data model are now described in `design.md`, `requirements.md`, and `tasks.md` (several carry an explicit `Implementation note:`). The rows below are the only live divergences and intentional matches that remain.
+
 | Spec | Code | Where |
 |---|---|---|
-| design.md: `WALK_PENALTY = 10`, no low-availability penalty | `WALK_PENALTY = 6`, plus -20 below 40% availability. tasks.md 5.1 matches the code; design.md wasn't updated | [scoring.py](backend/recommendation/scoring.py) |
-| design.md: a flat response `{lot_name, arrival_time, explanation, simulated_data}` | A nested `recommendation` object (Req 9.2's fields plus availability, walk, and permit) and an `alternatives` list | [handler.py](backend/handler.py), [api.ts](frontend/src/utils/api.ts) |
-| No "no data for this time" case | 422 `no_availability_data` and a "Try a different time" screen (commit `6ab0839`) | [handler.py](backend/handler.py), [ErrorState.tsx](frontend/src/components/ErrorState.tsx) |
-| design.md: Bedrock `invoke_model` | Bedrock Converse API (`converse`) | [bedrock_client.py](backend/shared/bedrock_client.py) |
-| Tasks 3.1 and 8.3: fail at module load when env vars are missing | Checked on first use, so modules import cleanly in tests | [db_client.py](backend/shared/db_client.py), [bedrock_client.py](backend/shared/bedrock_client.py) |
-| design.md: availability for every day, hours 07 to 21. Task 12.1: Mon to Fri, 07 to 21, in `scripts/seed_dynamodb.py` | Mon to Fri, hours 07 to 17, in `data/seed_dynamo.py` | [seed_dynamo.py](data/seed_dynamo.py) |
-| Req 8.1: lots and buildings store coordinates | No coordinates. Walking times are precomputed per lot and building pair, which design.md chose | [seed_dynamo.py](data/seed_dynamo.py) |
+| Task 3.1: `db_client.py` fails at module load when `DYNAMODB_TABLE_NAME` is missing (task text unchanged) | Both `db_client.py` and `bedrock_client.py` check env vars on first use, so modules import cleanly in tests. design.md and task 8.3 now note the first-use behavior; task 3.1's text still says module load | [db_client.py](backend/shared/db_client.py), [bedrock_client.py](backend/shared/bedrock_client.py) |
 | design.md: a time-only input uses the date in the campus time zone | Matches: the frontend sends a bare time-only `HH:MM`, which the handler resolves to the current date in the campus timezone (default `America/New_York` via `CAMPUS_TIMEZONE`). A full ISO datetime is also accepted | [handler.py](backend/handler.py), [InputForm.tsx](frontend/src/components/InputForm.tsx) |
-| Req 4.4 and 6.2: exact wording | "Arrive by ... to make it to class on time, including time to find a spot" and "Availability estimates are simulated for this prototype and are not live parking data." | [RecommendationResult.tsx](frontend/src/components/RecommendationResult.tsx), [DisclaimerBanner.tsx](frontend/src/components/DisclaimerBanner.tsx) |
+| Req 4.4 and 6.2: exact wording | Matches: "Arrive by ... to make it to class on time, including time to find a spot" and "Availability estimates are simulated for this prototype and are not live parking data." | [RecommendationResult.tsx](frontend/src/components/RecommendationResult.tsx), [DisclaimerBanner.tsx](frontend/src/components/DisclaimerBanner.tsx) |
 
 **Spec-driven vs. vibe coding, from the repo's evidence**
 
 - Every module design.md lists exists under the same name (`handler.py`, `recommendation/{eligibility,scoring,arrival_time}.py`, `shared/{db_client,bedrock_client,fallback_explainer}.py`, and the five frontend components), and the error-to-status mapping follows design.md's error table. The spec set the structure.
-- The spec hasn't changed since `b03ac24` (`git log -- .kiro/specs` lists only that commit). The later commits `6ab0839` and `80248c3` changed behavior and UI without touching it, which accounts for part of the drift above.
+- The spec was first committed in `b03ac24` and went untouched through `6ab0839` and `80248c3`, which changed behavior and UI without updating it; that gap is what produced the drift. The submission-prep documentation pass then reconciled the spec with the code (the `Implementation note:` lines in `design.md`, `requirements.md`, and `tasks.md`), so only the divergences listed above remain live.
 
 Writing requirements first forced the MVP boundaries to exist before any code did: destination building, class/event time, and permit type as the only inputs; permit eligibility as a hard filter that runs before scoring; a deterministic score instead of a model; one recommended lot with an arrival time; and the simulated-data disclaimer as a requirement, not an afterthought. That gave the project its shape and kept Kiro's generated code aligned with that shape from the first implementation task onward.
 
@@ -404,13 +400,15 @@ The short, explicit "must" constraints in `tech.md` (Key Design Constraints) and
 
 ### Vibe coding
 
-No chat transcripts are stored in the repo, so specific prompts can't be shown here. Git history shows the following:
+No chat transcripts are stored in the repo, so specific prompts can't be shown here. Git history shows the full chain in order (`git log --oneline`):
 
 - `b03ac24` "Build SmartPark MVP" (55 files) adds the spec, the steering, and the full implementation.
-- `6ab0839` "Improve unavailable time handling" separates "no data for this time" from "no eligible lots": a new `NoAvailabilityDataError`, a 422 response, a third frontend error screen, and updated tests. Before it, the handler reused the 404 path for missing data.
 - `80248c3` "Update SmartPark browser title" replaces the Vite template title ("Vite + React + TS") in `index.html` with "SmartPark".
+- `6ab0839` "Improve unavailable time handling" separates "no data for this time" from "no eligible lots": a new `NoAvailabilityDataError`, a 422 response, a third frontend error screen, and updated tests. Before it, the handler reused the 404 path for missing data.
+- `4a093e9` "Finalize SmartPark hackathon MVP" bundles the submission-prep work: the date/time fix, the Bedrock explanation layer, documentation, and the Kiro hooks and MCP config.
+- `c1535a6` "Restore time-only form; resolve HH:MM in campus timezone" returns the form to a single time input and resolves a bare `HH:MM` in the campus timezone, which is the behavior deployed today.
 
-This final submission pass was run from a Kiro chat session that launched a multi-step Kiro workflow: investigate and record a baseline, clean up and re-verify, write the docs, hooks, and MCP config, run a review loop, and produce a final report. The cleanup removed unused Vite template files (`frontend/README.md`, `vite.svg`, `react.svg`), added a SmartPark favicon, moved test-only dependencies out of the Lambda bundle into `requirements-dev.txt`, and tidied `.gitignore`. Each change was checked against the baseline: 17 backend tests passing, the frontend build, and lint.
+This final submission pass was run from a Kiro chat session that launched a multi-step Kiro workflow: investigate and record a baseline, clean up and re-verify, write the docs, hooks, and MCP config, run a review loop, and produce a final report. The cleanup removed unused Vite template files (`frontend/README.md`, `vite.svg`, `react.svg`), added a SmartPark favicon, moved test-only dependencies out of the Lambda bundle into `requirements-dev.txt`, and tidied `.gitignore`. Each change was checked against the baseline: 23 backend tests passing, the frontend build, and lint.
 
 I worked with Kiro in focused rounds: give it one concrete task, review the diff, run the tests, try the behavior, then move to the next issue, rather than asking it to redesign the whole project in one pass.
 
@@ -437,7 +435,7 @@ Why these three:
 - The data-honesty review turns the most important product rule into an automatic check where it's most likely to break: UI copy.
 - The confirmation gate puts a person in the loop before anything that changes or deletes the live stack or table.
 
-All three files parse as JSON, and the test command passes (17 tests). The confirm hook's one-liner was tested by piping in sample tool events. It printed the `ask` payload for each of the four phrases and nothing for other commands, empty input, or non-JSON input, exiting 0 every time. The files also match the hook schema in the installed Kiro IDE (1.2.56). That version tests each matcher as a regular expression against the saved file's path or the tool name (`execute_bash` and `control_bash_process` are its shell tools), runs command hooks from the workspace root, and asks you to confirm when a `PreToolUse` hook prints the `ask` decision. Kiro reads hook files when a session starts, and these hooks haven't fired inside a live Kiro session yet (see the [Kiro hooks docs](https://kiro.dev/docs/hooks/)).
+All three files parse as JSON, and the test command passes (23 tests). The confirm hook's one-liner was tested by piping in sample tool events. It printed the `ask` payload for each of the four phrases and nothing for other commands, empty input, or non-JSON input, exiting 0 every time. The files also match the hook schema in the installed Kiro IDE (1.2.56). That version tests each matcher as a regular expression against the saved file's path or the tool name (`execute_bash` and `control_bash_process` are its shell tools), runs command hooks from the workspace root, and asks you to confirm when a `PreToolUse` hook prints the `ask` decision. Kiro reads hook files when a session starts, and these hooks haven't fired inside a live Kiro session yet (see the [Kiro hooks docs](https://kiro.dev/docs/hooks/)).
 
 To be explicit: these three hooks were added during final submission hardening, not throughout the original build. They weren't part of the development process that produced the application code above; they exist to catch regressions and policy violations in whatever comes next. Their intended purpose: automatically run the backend test suite after a Python file changes, review frontend copy for data-honesty violations after a component changes, and require a human to confirm before any command that changes or deletes live AWS resources.
 
@@ -646,7 +644,7 @@ Run from the repo root. The results column shows what happened during submission
 | Check | Command | Result |
 |---|---|---|
 | Backend environment (once) | `python3 -m venv backend/.venv && backend/.venv/bin/pip install -r backend/requirements-dev.txt` | Not re-run because the venv already existed. An offline `pip install --dry-run` of `requirements-dev.txt` resolved cleanly |
-| Backend tests | `cd backend && .venv/bin/python -m pytest -q` | 17 passed |
+| Backend tests | `cd backend && .venv/bin/python -m pytest -q` | 23 passed |
 | Frontend dependencies (once) | `cd frontend && npm ci` | Not re-run because `node_modules` already existed |
 | Type-check and lint | `cd frontend && node_modules/.bin/tsc -b && npm run lint` | Passed, no warnings |
 | Production build | `cd frontend && npm run build` | Passed |
