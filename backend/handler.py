@@ -3,6 +3,7 @@
 import json
 import os
 from datetime import datetime
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import shared.db_client as db_client
 import shared.bedrock_client as bedrock_client
@@ -83,12 +84,17 @@ def _error(status: int, error_code: str, message: str, fields: list[str] | None 
 
 def _parse_start_time(start_time_str: str) -> datetime | None:
     """
-    Parse a start time string into a datetime.
+    Parse a start time string into a naive datetime.
 
     Accepts:
       - ISO 8601 datetime, e.g. "2025-09-15T09:00:00" or "2025-09-15T09:00"
+      - Bare 24-hour time "HH:MM", e.g. "09:00". The date is resolved to the
+        current date in the campus timezone (read from the CAMPUS_TIMEZONE
+        environment variable, default "America/New_York"), not the server's
+        UTC date, so the resolved weekday is the campus-local one.
 
-    Returns None if the string cannot be parsed.
+    Returns a naive datetime in all cases, or None if the string cannot be
+    parsed.
     """
     for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M"):
         try:
@@ -96,7 +102,23 @@ def _parse_start_time(start_time_str: str) -> datetime | None:
         except ValueError:
             pass
 
-    return None
+    try:
+        parsed_time = datetime.strptime(start_time_str, "%H:%M")
+    except ValueError:
+        return None
+
+    campus_tz = os.environ.get("CAMPUS_TIMEZONE", "America/New_York")
+    try:
+        tz = ZoneInfo(campus_tz)
+    except (ZoneInfoNotFoundError, KeyError, ValueError):
+        # Misconfigured timezone name: fall back to the known campus zone so a
+        # valid request is never regressed to an error by ops misconfiguration.
+        tz = ZoneInfo("America/New_York")
+
+    today = datetime.now(tz).date()
+    # Return a NAIVE datetime (no tzinfo), matching the shape of the ISO
+    # branches so the downstream pipeline's naive datetime math is unchanged.
+    return datetime.combine(today, parsed_time.time())
 
 
 def _parse_request(event: dict) -> tuple[dict | None, dict | None]:
@@ -136,7 +158,7 @@ def _parse_request(event: dict) -> tuple[dict | None, dict | None]:
         return None, _error(
             400,
             "validation_error",
-            "Invalid start_time format. Use ISO 8601 (e.g. '2025-09-15T09:00:00' or '2025-09-15T09:00').",
+            "Invalid start_time format. Use ISO 8601 (e.g. '2025-09-15T09:00:00' or '2025-09-15T09:00') or a 24-hour time 'HH:MM' (e.g. '09:00').",
             fields=["start_time"],
         )
 

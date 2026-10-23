@@ -116,20 +116,22 @@ Request body (JSON object):
 | Field | Type | Rules |
 |---|---|---|
 | `building_id` | string | Required, non-empty, must match a seeded building (for example `bldg_enterprise`, `bldg_johnson`, `bldg_exploratory`) |
-| `start_time` | string | Required. Full ISO 8601 datetime: `YYYY-MM-DDTHH:MM:SS` or `YYYY-MM-DDTHH:MM`, using the student's local date and time (no timezone conversion) |
+| `start_time` | string | Required. Either a bare 24-hour time `HH:MM` (resolved to the current date in the campus timezone, default `America/New_York` via `CAMPUS_TIMEZONE`) or a full ISO 8601 datetime (`YYYY-MM-DDTHH:MM:SS` or `YYYY-MM-DDTHH:MM`) |
 | `permit_type` | string | Required, non-empty. Seeded values: `GENERAL`, `FACULTY_STAFF`. An unknown value matches no lots (404) |
 
-The frontend combines a native date input and a native time input into a single `YYYY-MM-DDTHH:MM:SS` string and sends it verbatim, with no timezone conversion.
+The frontend sends only the selected time as a bare `HH:MM`, which the Lambda resolves to the current date in the campus timezone (default `America/New_York` via `CAMPUS_TIMEZONE`), so there is no dependency on the server's UTC date.
 
 Example request:
 
 ```json
 {
   "building_id": "bldg_exploratory",
-  "start_time": "2025-09-15T10:30:00",
+  "start_time": "10:30",
   "permit_type": "GENERAL"
 }
 ```
+
+A full ISO 8601 datetime (`YYYY-MM-DDTHH:MM:SS` or `YYYY-MM-DDTHH:MM`) is also accepted for `start_time`.
 
 Response (200). This body came from running `handler.lambda_handler` locally against the seed data with DynamoDB and Bedrock stubbed (reformatted here), so the explanation is the fallback text. With Bedrock enabled, only `explanation` changes.
 
@@ -356,7 +358,7 @@ The MVP has one Kiro spec, `smartpark-mvp`. Its `.config.kiro` records `"workflo
 | Tasks 3.1 and 8.3: fail at module load when env vars are missing | Checked on first use, so modules import cleanly in tests | [db_client.py](backend/shared/db_client.py), [bedrock_client.py](backend/shared/bedrock_client.py) |
 | design.md: availability for every day, hours 07 to 21. Task 12.1: Mon to Fri, 07 to 21, in `scripts/seed_dynamodb.py` | Mon to Fri, hours 07 to 17, in `data/seed_dynamo.py` | [seed_dynamo.py](data/seed_dynamo.py) |
 | Req 8.1: lots and buildings store coordinates | No coordinates. Walking times are precomputed per lot and building pair, which design.md chose | [seed_dynamo.py](data/seed_dynamo.py) |
-| design.md: a time-only input uses the date in the campus time zone | Removed: the frontend now always sends a full local `YYYY-MM-DDTHH:MM:SS` datetime, and the handler no longer accepts a bare time-only value, so this divergence no longer applies | [handler.py](backend/handler.py), [InputForm.tsx](frontend/src/components/InputForm.tsx) |
+| design.md: a time-only input uses the date in the campus time zone | Matches: the frontend sends a bare time-only `HH:MM`, which the handler resolves to the current date in the campus timezone (default `America/New_York` via `CAMPUS_TIMEZONE`). A full ISO datetime is also accepted | [handler.py](backend/handler.py), [InputForm.tsx](frontend/src/components/InputForm.tsx) |
 | Req 4.4 and 6.2: exact wording | "Arrive by ... to make it to class on time, including time to find a spot" and "Availability estimates are simulated for this prototype and are not live parking data." | [RecommendationResult.tsx](frontend/src/components/RecommendationResult.tsx), [DisclaimerBanner.tsx](frontend/src/components/DisclaimerBanner.tsx) |
 
 **Spec-driven vs. vibe coding, from the repo's evidence**
@@ -480,7 +482,7 @@ Resources that helped: AWS's own service documentation (SAM, API Gateway, Dynamo
 
 ### Known limitations
 
-- A weekend-in-UTC time-only request used to always return 422 regardless of the student's actual local weekday; the frontend now sends a full local date and time, so this no longer happens (see [handler.py](backend/handler.py), [InputForm.tsx](frontend/src/components/InputForm.tsx)).
+- A bare `HH:MM` request is resolved to the current date in the campus timezone (default `America/New_York` via `CAMPUS_TIMEZONE`), not the server's UTC date, so the resolved weekday is the campus-local one. The simulated dataset only covers weekdays 07:00–17:00, so a request whose resolved weekday or hour falls outside the dataset returns 422 `no_availability_data` (see [handler.py](backend/handler.py), [InputForm.tsx](frontend/src/components/InputForm.tsx)).
 - Dropdown options are hard-coded in `options.ts` and must be kept in sync with the seed by hand.
 - There are no frontend tests, and no backend tests for 400 or 500 responses.
 - The Bedrock client uses boto3's default timeouts, which are longer than the Lambda timeout.
@@ -570,10 +572,10 @@ Smoke test after seeding (not run during submission prep):
 ```bash
 curl -s -X POST "<ApiUrl>" \
   -H 'Content-Type: application/json' \
-  -d '{"building_id":"bldg_exploratory","start_time":"2025-09-15T10:30:00","permit_type":"GENERAL"}'
+  -d '{"building_id":"bldg_exploratory","start_time":"10:30","permit_type":"GENERAL"}'
 ```
 
-`start_time` must be a full ISO datetime (seconds optional); use any weekday date to see a 200, or a Saturday/Sunday date to see the 422 `no_availability_data` response.
+`start_time` may be a bare `HH:MM` (resolved to the current date in the campus timezone, default `America/New_York`) or a full ISO datetime (seconds optional); a time that resolves outside the simulated weekday dataset (weekdays 07:00–17:00) returns the 422 `no_availability_data` response.
 
 ### 3. Run the frontend locally
 
