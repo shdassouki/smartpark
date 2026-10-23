@@ -91,6 +91,8 @@ The quickest way to experience SmartPark is the [**live app**](https://main.d2mh
 
 <img src="docs/screenshots/02-recommendation.jpg" alt="SmartPark recommendation showing Lot K as the best match, arrive-by 11:47 AM, 68% predicted availability, 8-minute walk, two alternatives, and a Why this lot explanation" width="320" />
 
+> This screenshot is a live-app query, so its numbers (68%, 8-minute walk, Rappahannock and Mason Pond as alternatives) differ from the stubbed [worked example](#recommendation-algorithm) later in the README, which uses different inputs.
+
 **3. On a phone.** The responsive layout commuter students would actually use in the car before heading in, with the native time picker open.
 
 <img src="docs/screenshots/04-mobile.jpg" alt="SmartPark on a narrow mobile viewport with the time picker open" width="320" />
