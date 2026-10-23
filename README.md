@@ -81,7 +81,7 @@ This is the honest part, and it stays front and center throughout the app. Smart
 
 ## See it in action
 
-The quickest way to experience SmartPark is the [**live app**](https://main.d2mh5kfdhenw0s.amplifyapp.com) and the [**90-second demo video**](https://youtu.be/T2a895gpElw). A guided walkthrough of the real app:
+The quickest way to experience SmartPark is the [**live app**](https://main.d2mh5kfdhenw0s.amplifyapp.com) and the [**demo video**](https://youtu.be/T2a895gpElw). A guided walkthrough of the real app:
 
 **1. The input form.** Destination building, class/event start time, and permit type — with the non-dismissible simulated-data banner at the bottom.
 
@@ -94,8 +94,6 @@ The quickest way to experience SmartPark is the [**live app**](https://main.d2mh
 **3. On a phone.** The responsive layout commuter students would actually use in the car before heading in, with the native time picker open.
 
 <img src="docs/screenshots/04-mobile.jpg" alt="SmartPark on a narrow mobile viewport with the time picker open" width="320" />
-
-> One screen isn't pictured yet: the dedicated "Try a different time" state (HTTP 422), shown when eligible lots exist but none has data at its arrival time. To add it later, capture that screen, save it as `docs/screenshots/03-no-data.jpg`, and drop an `<img>` tag here matching the three above.
 
 ## 2. Architecture and technical documentation
 
