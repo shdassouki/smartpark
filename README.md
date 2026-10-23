@@ -1,43 +1,69 @@
-# SmartPark
+# SmartPark — Campus Parking, Figured Out
 
-SmartPark helps university commuter students pick one parking lot for their next class. It only considers lots their permit allows, weighs predicted availability against walking time, and tells them when to arrive at the lot.
+> **Because finding a parking spot shouldn't be harder than getting to class.**
+
+SmartPark helps university commuter students pick one parking lot for their next class. It only considers lots their permit allows, weighs predicted availability against walking time, and tells them exactly when to arrive at the lot.
+
+<p>
+  <a href="https://main.d2mh5kfdhenw0s.amplifyapp.com"><strong>🚗 Live app</strong></a>
+  &nbsp;·&nbsp;
+  <a href="https://youtu.be/T2a895gpElw"><strong>▶ Demo video</strong></a>
+  &nbsp;·&nbsp;
+  <a href="#2-architecture-and-technical-documentation"><strong>🏗 Architecture</strong></a>
+  &nbsp;·&nbsp;
+  <a href="#4-kiro-usage"><strong>🤖 Built with Kiro</strong></a>
+</p>
 
 > **Data note:** Parking availability in SmartPark is a prediction from a simulated prototype dataset (see [data/README.md](data/README.md)). It is not live or real-time, it is not measured campus data, and SmartPark does not track individual spots. The input and results screens always show this disclaimer, and every successful API response includes `"simulated_data": true`. The steering docs describe the data as "simulated/historical"; the current dataset is entirely simulated.
 
-**Live app:** <https://main.d2mh5kfdhenw0s.amplifyapp.com>
+---
 
-**▶ Demo video:** <https://youtu.be/T2a895gpElw>
+## The story behind it
 
-## Contents
+It's 9:48 a.m. Class starts at 10:00. I'm a George Mason University student, I'm already on campus, and I'm circling a full parking deck for the third time. I can see the building I need from here, but every lot near it is packed, and I'm not even sure the empty-looking one across the road accepts my permit. By the time I find a spot and jog over, I'm late — again.
+
+That's the problem every commuter student knows by heart: getting *to* campus is easy. Parking once you're there is the hard part. You don't know which lots have room, you don't know which ones your permit covers, and you find out the walk is too long only after you've already parked.
+
+SmartPark started as my answer to my own worst mornings. Tell it where you're headed, when class starts, and what permit you hold. It quietly rules out every lot you're not allowed to use, weighs how likely each remaining lot is to have space against how far you'd have to walk, and hands back one clear answer: park *here*, leave by *this* time, and here are your backups. No circling. No guessing. No sprint across campus.
+
+---
+
+## Table of contents
 
 1. [Project overview](#1-project-overview)
-2. [Architecture and technical documentation](#2-architecture-and-technical-documentation)
-3. [Design decisions](#3-design-decisions)
-4. [Kiro usage](#4-kiro-usage): [spec-driven development](#spec-driven-development), [steering docs](#steering-docs), [vibe coding](#vibe-coding), [agent hooks](#agent-hooks), [MCP](#mcp)
-5. [Learning journey and forward thinking](#5-learning-journey-and-forward-thinking)
-6. [Getting started](#6-getting-started)
-7. [License](#7-license)
+2. [See it in action](#see-it-in-action)
+3. [Architecture and technical documentation](#2-architecture-and-technical-documentation)
+4. [Design decisions](#3-design-decisions)
+5. [Kiro usage](#4-kiro-usage): [spec-driven development](#spec-driven-development), [steering docs](#steering-docs), [vibe coding](#vibe-coding), [agent hooks](#agent-hooks), [MCP](#mcp)
+6. [Learning journey and forward thinking](#5-learning-journey-and-forward-thinking)
+7. [Getting started](#6-getting-started)
+8. [License](#7-license)
 
 ## 1. Project overview
 
-### Problem
+### The problem
 
-Commuter students often arrive on campus without knowing which lots are likely to have space. They circle full decks, end up with a long walk to class, or park in a lot their permit doesn't cover.
+Commuter students often arrive on campus without knowing which lots are likely to have space. They circle full decks, end up with a long walk to class, or park in a lot their permit doesn't cover. The cost is small every morning and large over a semester: wasted time, missed starts, and tickets for parking somewhere they weren't allowed.
 
-### Target users
+### Who benefits
 
 University commuter students who drive to a scheduled class or event and hold a campus parking permit. The prototype uses George Mason University building and lot names so the setting feels real. Every value in the dataset is simulated.
 
-### Solution
+### How it works — five steps
 
-The student enters a destination building, a class or event start time, and a permit type. SmartPark then:
+| | Step | What happens |
+|---|---|---|
+| 1 | **Select your destination** | Pick the building you're heading to (for example Exploratory Hall). |
+| 2 | **Enter your class time** | Choose when class or your event starts. |
+| 3 | **Choose your permit** | General or Faculty/Staff — this becomes a hard filter. |
+| 4 | **Get an eligible recommendation** | SmartPark removes every lot your permit doesn't cover, then scores the rest on predicted availability *and* walking time together, and returns the single best lot. |
+| 5 | **See arrival guidance and alternatives** | An "Arrive by" time (including time to find a spot), a plain-language explanation of the trade-off, and up to two backup lots. |
 
-1. removes every lot the permit doesn't cover, before any scoring;
-2. scores the remaining lots on predicted availability and walking time together, so neither the closest lot nor the emptiest lot wins automatically;
-3. returns one recommended lot, up to two alternatives, and a plain-language explanation of the trade-off;
-4. tells the student when to arrive at the lot, including time to find a spot.
+The ranking is deterministic — the same inputs always produce the same answer. Amazon Bedrock only writes the explanation *after* the lot has been chosen, and a template-based fallback takes over if Bedrock is unavailable, so the AI never decides where you park.
 
-The ranking is deterministic. Amazon Bedrock only writes the explanation after the lot has been chosen, and a template-based fallback takes over if Bedrock is unavailable.
+### Simulated predictions vs. real-time parking
+
+This is the honest part, and it stays front and center throughout the app. SmartPark's availability numbers are **predictions from a simulated prototype dataset** — think "this lot is usually about 60% full at 10 a.m. on a Monday," not "there are 14 open spots right now." SmartPark does not read live sensors or cameras, and it never claims to know about individual spots. A non-dismissible banner says so on every screen, and every API response carries `"simulated_data": true`. The architecture is ready to swap in real historical or live counts later; the data-honesty rules are what would need the most care if that happened.
 
 ### Key features
 
@@ -52,6 +78,24 @@ The ranking is deterministic. Amazon Bedrock only writes the explanation after t
 | Separate screens for "no lots for this permit" (404), "no data for this time" (422), and other errors | [api.ts](frontend/src/utils/api.ts), [ErrorState.tsx](frontend/src/components/ErrorState.tsx) |
 | Non-dismissible simulated-data disclaimer | [DisclaimerBanner.tsx](frontend/src/components/DisclaimerBanner.tsx) |
 | Mobile-friendly layout: a centered column up to 560 px wide, two-column rows that collapse to one column at 400 px wide or less (form) and 360 px or less (results), and form controls at least 46 px tall | [App.css](frontend/src/App.css), [index.css](frontend/src/index.css) |
+
+## See it in action
+
+The quickest way to experience SmartPark is the [**live app**](https://main.d2mh5kfdhenw0s.amplifyapp.com) and the [**90-second demo video**](https://youtu.be/T2a895gpElw). A guided walkthrough of the real app:
+
+**1. The input form.** Destination building, class/event start time, and permit type — with the non-dismissible simulated-data banner at the bottom.
+
+<img src="docs/screenshots/01-input-form.jpg" alt="SmartPark input form with destination building, class/event time, and permit type fields, and the simulated-data banner" width="320" />
+
+**2. The recommendation.** One best lot ("Lot K") with its predicted availability and walking time, an "Arrive by" time, up to two alternatives, and a plain-language explanation of the trade-off.
+
+<img src="docs/screenshots/02-recommendation.jpg" alt="SmartPark recommendation showing Lot K as the best match, arrive-by 11:47 AM, 68% predicted availability, 8-minute walk, two alternatives, and a Why this lot explanation" width="320" />
+
+**3. On a phone.** The responsive layout commuter students would actually use in the car before heading in, with the native time picker open.
+
+<img src="docs/screenshots/04-mobile.jpg" alt="SmartPark on a narrow mobile viewport with the time picker open" width="320" />
+
+> One screen isn't pictured yet: the dedicated "Try a different time" state (HTTP 422), shown when eligible lots exist but none has data at its arrival time. To add it later, capture that screen, save it as `docs/screenshots/03-no-data.jpg`, and drop an `<img>` tag here matching the three above.
 
 ## 2. Architecture and technical documentation
 
@@ -313,6 +357,8 @@ smartpark/
 - **Known limits at higher load:** a full-table Scan on every request (a single page with no pagination, so lots past DynamoDB's 1 MB page limit would be missed), sequential per-lot reads, a new Bedrock client on every call, and boto3's default 60-second timeouts, which are longer than the 15-second Lambda timeout. A hung Bedrock call would time out the Lambda before the fallback runs. Fixes are listed under [Future enhancements and scaling plans](#future-enhancements-and-scaling-plans).
 
 ## 4. Kiro usage
+
+SmartPark was built *with* Kiro, not just checked by it: a requirements-first spec defined the MVP before any code existed, three steering docs kept every prompt aligned with the product and architecture rules, and a final multi-step Kiro workflow cleaned up, documented, and hardened the project. This section shows the evidence in the repo and git history, and is careful to separate what Kiro actually did from what is merely configured for future work.
 
 ### Where to look
 
